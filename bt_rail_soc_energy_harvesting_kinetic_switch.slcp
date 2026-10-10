@@ -1,0 +1,64 @@
+# Silicon Labs Project Configuration Tools: slcp, v0, Component selection file.
+project_name: bt_rail_soc_energy_harvesting_kinetic_switch
+label: bt_rail_soc_energy_harvesting_kinetic_switch
+description: |
+  This example uses a Kinetic Harvester Shield to demonstrate a self-powered switch device. This example is implemented in RAIL compatible with BLE.
+category: Energy Harvesting
+filter:
+- name: Device Type
+  value: [SoC]
+- name: Project Difficulty
+  value: [Advanced]
+- name: Wireless Technology
+  value: [Bluetooth]
+package: Bluetooth
+quality: experimental
+readme:
+- {path: README.md}
+- {path: README.md}
+source:
+- {path: main.c}
+- {path: app.c}
+- {path: app_rail_ble.c}
+include:
+- path: .
+  file_list:
+  - {path: app.h}
+  - {path: app_rail_ble.h}
+sdk: {id: simplicity_sdk, version: 2025.6.3}
+toolchain_settings: []
+component:
+- {id: EFR32MG22E224F512IM40}
+- {id: app_assert}
+- {id: brd2710a}
+- {id: clock_manager}
+- {id: device_init}
+- {id: mpu}
+- {id: radio_config_simple_rail_singlephy}
+- {id: rail_lib_singleprotocol}
+- {id: rail_util_callbacks}
+- {id: rail_util_dma}
+- {id: rail_util_pa}
+- {id: rail_util_rf_path}
+- {id: sl_main}
+other_file:
+- {path: image/adv_packet.png}
+- {path: image/create_project.png}
+- {path: image/device_runtime.png}
+- {path: image/disable_lfxo.png}
+- {path: image/hardware_connection.png}
+- {path: image/overview.png}
+- {path: image/si_connect.png}
+- {path: image/si_connect2.png}
+- {path: image/si_connect3.png}
+- {path: image/console.png}
+- {path: image/console2.png}
+- {path: image/observer.png}
+- {path: image/observer_log.png}
+configuration:
+- {name: SL_CLOCK_MANAGER_DEFAULT_LF_CLOCK_SOURCE, value: SL_CLOCK_MANAGER_DEFAULT_LF_CLOCK_SOURCE_LFRCO}
+- {name: SL_CLOCK_MANAGER_LFXO_EN, value: '0'}
+ui_hints:
+  highlight:
+  - {path: README.md, focus: true}
+
