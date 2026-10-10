@@ -35,6 +35,8 @@
  * This code will be maintained at the sole discretion of Silicon Labs.
  *
  ******************************************************************************/
+// Branch: ble_tx_all_3ch - transmit on all 3 advertising channels
+
 #include "app_assert.h"
 
 #include "rail.h"
