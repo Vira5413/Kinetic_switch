@@ -64,6 +64,9 @@
 
 #define RAIL_BLE_ADV_CHANNEL              37
 
+static const uint16_t adv_logical_ch[3] = {37, 38, 39};
+static const uint16_t adv_physical_ch[3] = { 0, 12, 39 };
+static uint8_t adv_ch_idx = 0;
 // -----------------------------------------------------------------------------
 //                          Static Function Declarations
 // -----------------------------------------------------------------------------
@@ -247,24 +250,58 @@ static void set_radio_to_idle_state(RAIL_Handle_t rail_handle)
   RAIL_StopTxStream(rail_handle);
   RAIL_Idle(rail_handle, RAIL_IDLE, true);
 }
+//
+//static sl_status_t rail_ble_advertise(RAIL_Handle_t rail_handle,
+//                                      uint8_t *packet, uint16_t packet_len)
+//{
+//  RAIL_Status_t status;
+//
+//  set_radio_to_idle_state(rail_handle);
+//
+//  // Add packet to RAIL fifo
+//  status = RAIL_WriteTxFifo(rail_handle,
+//                            packet,
+//                            packet_len,
+//                            true);
+//
+//  // Schedule to send packet
+//  status |= RAIL_StartScheduledTx(rail_handle, 0,
+//                                  RAIL_TX_OPTIONS_DEFAULT,
+//                                  &shedule_tx_config, NULL);
+//
+//  return status == RAIL_STATUS_NO_ERROR ? SL_STATUS_OK : SL_STATUS_FAIL;
+//}
 
 static sl_status_t rail_ble_advertise(RAIL_Handle_t rail_handle,
                                       uint8_t *packet, uint16_t packet_len)
 {
   RAIL_Status_t status;
 
-  set_radio_to_idle_state(rail_handle);
+  set_radio_to_idle_state(rail_handle);          // must be idle before reconfiguring
 
-  // Add packet to RAIL fifo
-  status = RAIL_WriteTxFifo(rail_handle,
-                            packet,
-                            packet_len,
-                            true);
+  // 1. Retune: access address, CRC init, and whitening seed for this channel
+  status = RAIL_BLE_ConfigChannelRadioParams(rail_handle,
+                                             0x555555,
+                                             0x8E89BED6,
+                                             adv_logical_ch[adv_ch_idx],
+                                             false);
+  if (status != RAIL_STATUS_NO_ERROR) {
+    return SL_STATUS_FAIL;
+  }
 
-  // Schedule to send packet
-  status |= RAIL_StartScheduledTx(rail_handle, 0,
-                                  RAIL_TX_OPTIONS_DEFAULT,
-                                  &shedule_tx_config, NULL);
+  // 2. Load the packet
+  if (RAIL_WriteTxFifo(rail_handle, packet, packet_len, true) != packet_len) {
+    return SL_STATUS_FAIL;
+  }
+
+  // 3. Send on the matching physical channel
+  status = RAIL_StartScheduledTx(rail_handle,
+                                 adv_physical_ch[adv_ch_idx],
+                                 RAIL_TX_OPTIONS_DEFAULT,
+                                 &shedule_tx_config, NULL);
+
+  // 4. Next time, use the next channel: 0 → 1 → 2 → 0 …
+  adv_ch_idx = (adv_ch_idx + 1) % 3;
 
   return status == RAIL_STATUS_NO_ERROR ? SL_STATUS_OK : SL_STATUS_FAIL;
 }
