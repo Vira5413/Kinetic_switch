@@ -43,6 +43,7 @@
 #include "app_assert.h"
 #include "em_emu.h"
 #include "efr32mg22_devinfo.h"
+#include "sl_gpio.h"
 
 #include "rail.h"
 #include "rail_features.h"
@@ -107,20 +108,26 @@ static void handle_transmit(RAIL_Handle_t rail_handle);
 /// Transmit FIFO
 static __ALIGNED(RAIL_FIFO_ALIGNMENT) uint8_t tx_fifo[RAIL_FIFO_SIZE];
 
-#define ADV_RAIL_PACKET_LENGTH       26
+#define ADV_RAIL_PACKET_LENGTH       27
 #define ADV_RAIL_ADVA_OFFSET         2
+#define ADV_RAIL_STATUS_OFFSET       15
+
+static const sl_gpio_t btn0 = { .port = SL_GPIO_PORT_C, .pin = 7 };
+
+
 static __ALIGNED(RAIL_FIFO_ALIGNMENT)
 uint8_t adv_rail_packet[ADV_RAIL_PACKET_LENGTH] =
 {
   0x02, // packet type: ADV_NONCONN_­IND, non-connectable
-  0x18, // length: 24
+  0x19, // length: 25
   0x2f, 0x45, 0x0a, 0x6f, 0x0d, 0x00, // AdvA: advertiser address
   0x02, // adv data length 2
   0x01, // adv data type 1 (flags)
   0x06, // flags: LE General Discoverable Mode, BR/EDR Not Supported
-  0x03, // adv data length 5
+  0x04, // adv data length 5
   0xff, // adv data type: manufacturer specific
   0xff, 0x02, // manufacturer: Silicon Labs
+  0x00,  // STATUS: 0x00 released, 0x01 held   ← new
   0x0a, // adv data length 9
   0x09, // adv data type 9 (complete local name)
   'E', 'H', ' ', 'S', 'w', 'i', 't', 'c', 'h'// "EH Switch"
@@ -239,6 +246,12 @@ static void app_rail_ble_adv_init(RAIL_Handle_t rail_handle)
                                     0x8E89BED6,
                                     RAIL_BLE_ADV_CHANNEL,
                                     false);
+  bool level;
+  sl_gpio_set_pin_mode(&btn0, SL_GPIO_MODE_INPUT, 0);     // no pull: board has 1 MΩ
+  sl_gpio_get_pin_input(&btn0, &level);
+  sl_gpio_set_pin_mode(&btn0, SL_GPIO_MODE_DISABLED, 0);  // input buffer off again
+  adv_rail_packet[ADV_RAIL_STATUS_OFFSET] = level ? 0x00 : 0x01;
+
   tx_requested = true;
 }
 
