@@ -112,7 +112,7 @@ static __ALIGNED(RAIL_FIFO_ALIGNMENT) uint8_t tx_fifo[RAIL_FIFO_SIZE];
 #define ADV_RAIL_ADVA_OFFSET         2
 #define ADV_RAIL_STATUS_OFFSET       15
 
-static const sl_gpio_t btn0 = { .port = SL_GPIO_PORT_C, .pin = 7 };
+static const sl_gpio_t sense_pin = { .port = SL_GPIO_PORT_C, .pin = 0 };
 
 
 static __ALIGNED(RAIL_FIFO_ALIGNMENT)
@@ -246,11 +246,11 @@ static void app_rail_ble_adv_init(RAIL_Handle_t rail_handle)
                                     0x8E89BED6,
                                     RAIL_BLE_ADV_CHANNEL,
                                     false);
-  bool level;
-  sl_gpio_set_pin_mode(&btn0, SL_GPIO_MODE_INPUT, 0);     // no pull: board has 1 MΩ
-  sl_gpio_get_pin_input(&btn0, &level);
-  sl_gpio_set_pin_mode(&btn0, SL_GPIO_MODE_DISABLED, 0);  // input buffer off again
-  adv_rail_packet[ADV_RAIL_STATUS_OFFSET] = level ? 0x00 : 0x01;
+  bool level = false;
+  sl_gpio_set_pin_mode(&sense_pin, SL_GPIO_MODE_INPUT, 0);
+  sl_gpio_get_pin_input(&sense_pin, &level);
+  sl_gpio_set_pin_mode(&sense_pin, SL_GPIO_MODE_DISABLED, 0);  // input buffer off again
+  adv_rail_packet[ADV_RAIL_STATUS_OFFSET] = level ? 0x01 : 0x00;
 
   tx_requested = true;
 }
