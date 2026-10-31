@@ -108,9 +108,11 @@ static void handle_transmit(RAIL_Handle_t rail_handle);
 /// Transmit FIFO
 static __ALIGNED(RAIL_FIFO_ALIGNMENT) uint8_t tx_fifo[RAIL_FIFO_SIZE];
 
-#define ADV_RAIL_PACKET_LENGTH       27
+//#define ADV_RAIL_PACKET_LENGTH       33
+#define ADV_RAIL_PACKET_LENGTH       31
 #define ADV_RAIL_ADVA_OFFSET         2
-#define ADV_RAIL_STATUS_OFFSET       15
+#define BTHOME_PID_OFFSET        28
+#define BTHOME_WINDOW_OFFSET     30
 
 static const sl_gpio_t sense_pin = { .port = SL_GPIO_PORT_C, .pin = 0 };
 
@@ -118,19 +120,19 @@ static const sl_gpio_t sense_pin = { .port = SL_GPIO_PORT_C, .pin = 0 };
 static __ALIGNED(RAIL_FIFO_ALIGNMENT)
 uint8_t adv_rail_packet[ADV_RAIL_PACKET_LENGTH] =
 {
-  0x02, // packet type: ADV_NONCONN_­IND, non-connectable
-  0x19, // length: 25
-  0x2f, 0x45, 0x0a, 0x6f, 0x0d, 0x00, // AdvA: advertiser address
-  0x02, // adv data length 2
-  0x01, // adv data type 1 (flags)
-  0x06, // flags: LE General Discoverable Mode, BR/EDR Not Supported
-  0x04, // adv data length 5
-  0xff, // adv data type: manufacturer specific
-  0xff, 0x02, // manufacturer: Silicon Labs
-  0x00,  // STATUS: 0x00 released, 0x01 held   ← new
-  0x0a, // adv data length 9
-  0x09, // adv data type 9 (complete local name)
-  'E', 'H', ' ', 'S', 'w', 'i', 't', 'c', 'h'// "EH Switch"
+  0x02,                                   // [0]  ADV_NONCONN_IND, public address
+  //0x1F,                                   // [1]  payload: 6 AdvA + 25 AdvData = 31 // window info + press info
+  0x1D,                                   // [1]  payload: 6 AdvA + 23 AdvData = 29 // only window info in packet
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,     // [2..7]  AdvA, filled from EUI-48
+  0x02, 0x01, 0x06,                       // [8..10] Flags
+  0x0A, 0x09, 'E','H',' ','S','w','i','t','c','h',   // [11..21] name
+  //0x0A,                                   // [22] service data length 10  / window info + press info
+  0x08,                                   // [22] service data length 8  // only window info in packet
+  0x16, 0xD2, 0xFC,                       // [23..25] service data, UUID 0xFCD2
+  0x44,                                   // [26] BTHome v2, unencrypted, trigger-based
+  0x00, 0x00,                             // [27..28] packet ID  ← filled per boot
+  0x2D, 0x00,                             // [29..30] window     ← filled from sensor
+  //0x3A, 0x01,                             // [31..32] button event: press
 };
 
 static RAIL_ScheduleTxConfig_t shedule_tx_config = {
@@ -246,11 +248,24 @@ static void app_rail_ble_adv_init(RAIL_Handle_t rail_handle)
                                     0x8E89BED6,
                                     RAIL_BLE_ADV_CHANNEL,
                                     false);
+
+
+// random generator hor HA but always giving FE so ifgnoring
+//  uint8_t pid = 0;
+//  RAIL_GetRadioEntropy(rail_handle, &pid, 1);
+//  adv_rail_packet[BTHOME_PID_OFFSET] = pid; // random generator from radio noise
+
+
   bool level = false;
   sl_gpio_set_pin_mode(&sense_pin, SL_GPIO_MODE_INPUT, 0);
   sl_gpio_get_pin_input(&sense_pin, &level);
   sl_gpio_set_pin_mode(&sense_pin, SL_GPIO_MODE_DISABLED, 0);  // input buffer off again
-  adv_rail_packet[ADV_RAIL_STATUS_OFFSET] = level ? 0x01 : 0x00;
+
+  uint8_t window = level ? 0x00 : 0x01;
+  adv_rail_packet[BTHOME_WINDOW_OFFSET] = window;
+  adv_rail_packet[BTHOME_PID_OFFSET]    = window;   // alternates with each actuation // now simpliy giving alternate ID every time
+
+
 
   tx_requested = true;
 }
