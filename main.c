@@ -25,6 +25,7 @@
 
 int main(void)
 {
+
   // Initialize Silicon Labs device, system, service(s) and protocol stack(s).
   // Note that if the kernel is present, the start task will be started and
   // software component initialization will take place there.

@@ -53,6 +53,8 @@
 #include "app_rail_ble.h"
 #include "app.h"
 
+#include "psa/crypto.h"
+
 // -----------------------------------------------------------------------------
 //                              Macros and Typedefs
 // -----------------------------------------------------------------------------
@@ -108,18 +110,23 @@ static void handle_transmit(RAIL_Handle_t rail_handle);
 /// Transmit FIFO
 static __ALIGNED(RAIL_FIFO_ALIGNMENT) uint8_t tx_fifo[RAIL_FIFO_SIZE];
 
-#define ADV_RAIL_PACKET_LENGTH       27
+#define ADV_RAIL_PACKET_LENGTH       39
 #define ADV_RAIL_ADVA_OFFSET         2
 #define ADV_RAIL_STATUS_OFFSET       15
+#define ADV_RAIL_RANDOM_OFFSET       31     // new
+#define ADV_RAIL_RANDOM_LEN          8      // new
 
 static const sl_gpio_t sense_pin = { .port = SL_GPIO_PORT_C, .pin = 0 };
 
+//static const sl_gpio_t dbg_pin = { .port = SL_GPIO_PORT_B, .pin = 4 };   // PB04
+//#define DBG_HIGH()  sl_gpio_set_pin(&dbg_pin)
+//#define DBG_LOW()   sl_gpio_clear_pin(&dbg_pin)
 
 static __ALIGNED(RAIL_FIFO_ALIGNMENT)
 uint8_t adv_rail_packet[ADV_RAIL_PACKET_LENGTH] =
 {
   0x02, // packet type: ADV_NONCONN_­IND, non-connectable
-  0x19, // length: 25
+  0x25, // length: 37
   0x2f, 0x45, 0x0a, 0x6f, 0x0d, 0x00, // AdvA: advertiser address
   0x02, // adv data length 2
   0x01, // adv data type 1 (flags)
@@ -130,7 +137,10 @@ uint8_t adv_rail_packet[ADV_RAIL_PACKET_LENGTH] =
   0x00,  // STATUS: 0x00 released, 0x01 held   ← new
   0x0a, // adv data length 9
   0x09, // adv data type 9 (complete local name)
-  'E', 'H', ' ', 'S', 'w', 'i', 't', 'c', 'h'// "EH Switch"
+  'E', 'H', ' ', 'S', 'w', 'i', 't', 'c', 'h',// "EH Switch"
+  0x0B, 0xFF, 0xFF, 0x02, // [27..30] new manufacturer data header
+  0x00, 0x00, 0x00, 0x00,                 // [31..34] random ID ← filled from TRNG
+  0x00, 0x00, 0x00, 0x00                 // [35..38]
 };
 
 static RAIL_ScheduleTxConfig_t shedule_tx_config = {
@@ -157,6 +167,8 @@ static bool rail_packet_sent = false;
  *****************************************************************************/
 void app_init(void)
 {
+  //sl_gpio_set_pin_mode(&dbg_pin, SL_GPIO_MODE_PUSH_PULL, 0);   // output, low
+  //DBG_HIGH();
 
   rail_ble_init(RAIL_BLE_PROTOCOL_BLE_1MBPS);
 
@@ -165,6 +177,8 @@ void app_init(void)
 
   // sets the RAIL TX FIFO
   app_set_rail_tx_fifo(rail_handle);
+
+  //DBG_LOW();
 
   // initializes the ble adv
   app_rail_ble_adv_init(rail_handle);
@@ -214,6 +228,21 @@ void sl_rail_util_on_event(RAIL_Handle_t rail_handle,
 //                          Static Function Definitions
 // -----------------------------------------------------------------------------
 
+static sl_status_t fill_random(uint8_t *buf, uint32_t len)
+{
+  //DBG_HIGH();                                   // pulse 2: crypto init
+  psa_status_t s = psa_crypto_init();
+  //DBG_LOW();
+  if (s != PSA_SUCCESS) {
+    return SL_STATUS_FAIL;
+  }
+
+  //DBG_HIGH();                                   // pulse 3: generate 8 bytes
+  s = psa_generate_random(buf, len);
+  //DBG_LOW();
+  return (s == PSA_SUCCESS) ? SL_STATUS_OK : SL_STATUS_FAIL;
+}
+
 /******************************************************************************
  * Initialization of RAIL TX FIFO
  *****************************************************************************/
@@ -246,6 +275,9 @@ static void app_rail_ble_adv_init(RAIL_Handle_t rail_handle)
                                     0x8E89BED6,
                                     RAIL_BLE_ADV_CHANNEL,
                                     false);
+
+  fill_random(&adv_rail_packet[ADV_RAIL_RANDOM_OFFSET], ADV_RAIL_RANDOM_LEN);
+
   bool level = false;
   sl_gpio_set_pin_mode(&sense_pin, SL_GPIO_MODE_INPUT, 0);
   sl_gpio_get_pin_input(&sense_pin, &level);
