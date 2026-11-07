@@ -208,14 +208,14 @@ SECTIONS
 /* Calculate heap size based on RAM limits. */
 heap_limit = ORIGIN(RAM) + LENGTH(RAM);  /* End of RAM */
 heap_size = heap_limit - __HeapBase;
-  .memory_manager_heap (NOLOAD):
+  .heap (NOLOAD):
   {
     . = ALIGN(8);
     __HeapBase = .;
     . += heap_size;
     __end__ = .;
     _end = __end__;
-    KEEP(*(.memory_manager_heap*))
+    KEEP(*(.heap*))
     __HeapLimit = ORIGIN(RAM) + LENGTH(RAM);
   } > RAM
 

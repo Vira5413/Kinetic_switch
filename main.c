@@ -23,8 +23,14 @@
 #include "rail.h"
 #include "app.h"
 
+#include "em_cmu.h"
+#include "em_gpio.h"
+
 int main(void)
 {
+  CMU_ClockEnable(cmuClock_GPIO, true);              // GPIO clock isn't on yet this early
+  GPIO_PinModeSet(gpioPortB, 4, gpioModePushPull, 1); // PB04 high: main() reached
+
 
   // Initialize Silicon Labs device, system, service(s) and protocol stack(s).
   // Note that if the kernel is present, the start task will be started and

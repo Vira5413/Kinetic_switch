@@ -53,7 +53,10 @@
 #include "app_rail_ble.h"
 #include "app.h"
 
-#include "psa/crypto.h"
+//#include "psa/crypto.h"
+
+#include "em_gpio.h"
+#include "sl_clock_manager.h"
 
 // -----------------------------------------------------------------------------
 //                              Macros and Typedefs
@@ -122,6 +125,8 @@ static const sl_gpio_t sense_pin = { .port = SL_GPIO_PORT_C, .pin = 0 };
 //#define DBG_HIGH()  sl_gpio_set_pin(&dbg_pin)
 //#define DBG_LOW()   sl_gpio_clear_pin(&dbg_pin)
 
+#define DBG_TOGGLE()  GPIO_PinOutToggle(gpioPortB, 4)
+
 static __ALIGNED(RAIL_FIFO_ALIGNMENT)
 uint8_t adv_rail_packet[ADV_RAIL_PACKET_LENGTH] =
 {
@@ -165,11 +170,14 @@ static bool rail_packet_sent = false;
 /******************************************************************************
  * The function is used for some basic initialization related to the app.
  *****************************************************************************/
+//void app_init_pre_clock(void) { DBG_TOGGLE(); }
+//void app_init_early(void)     { DBG_TOGGLE(); }
+
 void app_init(void)
 {
   //sl_gpio_set_pin_mode(&dbg_pin, SL_GPIO_MODE_PUSH_PULL, 0);   // output, low
   //DBG_HIGH();
-
+  DBG_TOGGLE();
   rail_ble_init(RAIL_BLE_PROTOCOL_BLE_1MBPS);
 
   // Get RAIL handle, used later by the application
@@ -179,7 +187,7 @@ void app_init(void)
   app_set_rail_tx_fifo(rail_handle);
 
   //DBG_LOW();
-
+  DBG_TOGGLE();
   // initializes the ble adv
   app_rail_ble_adv_init(rail_handle);
 
@@ -228,20 +236,22 @@ void sl_rail_util_on_event(RAIL_Handle_t rail_handle,
 //                          Static Function Definitions
 // -----------------------------------------------------------------------------
 
-static sl_status_t fill_random(uint8_t *buf, uint32_t len)
-{
-  //DBG_HIGH();                                   // pulse 2: crypto init
-  psa_status_t s = psa_crypto_init();
-  //DBG_LOW();
-  if (s != PSA_SUCCESS) {
-    return SL_STATUS_FAIL;
-  }
-
-  //DBG_HIGH();                                   // pulse 3: generate 8 bytes
-  s = psa_generate_random(buf, len);
-  //DBG_LOW();
-  return (s == PSA_SUCCESS) ? SL_STATUS_OK : SL_STATUS_FAIL;
-}
+//static sl_status_t fill_random(uint8_t *buf, uint32_t len)
+//{
+//  //DBG_HIGH();                                   // pulse 2: crypto init
+//  psa_status_t s = psa_crypto_init();
+//  //DBG_LOW();
+//  DBG_TOGGLE();
+//  if (s != PSA_SUCCESS) {
+//    return SL_STATUS_FAIL;
+//  }
+//
+//  //DBG_HIGH();                                   // pulse 3: generate 8 bytes
+//  s = psa_generate_random(buf, len);
+//  //DBG_LOW();
+//  DBG_TOGGLE();
+//  return (s == PSA_SUCCESS) ? SL_STATUS_OK : SL_STATUS_FAIL;
+//}
 
 /******************************************************************************
  * Initialization of RAIL TX FIFO
@@ -276,7 +286,7 @@ static void app_rail_ble_adv_init(RAIL_Handle_t rail_handle)
                                     RAIL_BLE_ADV_CHANNEL,
                                     false);
 
-  fill_random(&adv_rail_packet[ADV_RAIL_RANDOM_OFFSET], ADV_RAIL_RANDOM_LEN);
+  //fill_random(&adv_rail_packet[ADV_RAIL_RANDOM_OFFSET], ADV_RAIL_RANDOM_LEN);
 
   bool level = false;
   sl_gpio_set_pin_mode(&sense_pin, SL_GPIO_MODE_INPUT, 0);

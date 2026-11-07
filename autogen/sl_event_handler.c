@@ -7,9 +7,6 @@
 #include "sl_rail_util_rf_path.h"
 #include "sl_board_control.h"
 #include "sl_gpio.h"
-#include "sl_mbedtls.h"
-#include "psa/crypto.h"
-#include "sl_se_manager.h"
 
 void sli_driver_permanent_allocation(void)
 {
@@ -46,9 +43,6 @@ void sl_driver_init(void)
 void sl_service_init(void)
 {
   sl_board_configure_vcom();
-  sl_mbedtls_init();
-  psa_crypto_init();
-  sl_se_init();
 }
 
 void sl_stack_init(void)
