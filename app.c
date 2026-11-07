@@ -278,6 +278,26 @@ static void app_rail_ble_adv_init(RAIL_Handle_t rail_handle)
   adv_rail_packet[ADV_RAIL_ADVA_OFFSET + 4] = DEVINFO->EUI48H & 0xff;
   adv_rail_packet[ADV_RAIL_ADVA_OFFSET + 5] = (DEVINFO->EUI48H >> 8) & 0xff;
 
+  sl_clock_manager_enable_bus_clock(SL_BUS_CLOCK_HFXO0);
+
+  // read core bais value.....
+  adv_rail_packet[37] =(HFXO0->XTALCTRL & _HFXO_XTALCTRL_COREBIASANA_MASK) >> _HFXO_XTALCTRL_COREBIASANA_SHIFT;
+
+  // read status
+  uint8_t flags = 0;
+  if (HFXO0->STATUS & HFXO_STATUS_RDY) {
+    flags |= (1 << 0);     // set bit 0
+  }
+
+  if (HFXO0->STATUS & HFXO_STATUS_COREBIASOPTRDY) {
+    flags |= (1 << 1);     // set bit 1
+  }
+
+  if (HFXO0->XTALCTRL & HFXO_XTALCTRL_SKIPCOREBIASOPT) {
+    flags |= (1 << 2);     // set bit 2
+  }
+
+  adv_rail_packet[38] = flags;
   // Configures us for the first advertising channel (Physical: 0, Logical: 37).
   // The CRC init value and Access Address come from the BLE specification.
   RAIL_BLE_ConfigChannelRadioParams(rail_handle,
