@@ -154,6 +154,8 @@ uint32_t SLI_CLOCK_MANAGER_DPLL_M         = SL_CLOCK_MANAGER_DPLL_M;
 FUNCTION_SCOPE void init_hfxo(void)
 {
   CMU_HFXOInit_TypeDef clock_manager_hfxo_init = CMU_HFXOINIT_DEFAULT;
+
+
   clock_manager_hfxo_init.mode = SLI_CLOCK_MANAGER_HFXO_MODE >> _HFXO_CFG_MODE_SHIFT;
 
   if (SLI_CLOCK_MANAGER_HFXO_MODE == cmuHfxoOscMode_ExternalSine) {
@@ -288,6 +290,9 @@ FUNCTION_SCOPE void init_hfxo(void)
 #endif
 
   SystemHFXOClockSet(SLI_CLOCK_MANAGER_HFXO_FREQ);
+  sl_clock_manager_enable_bus_clock(SL_BUS_CLOCK_HFXO0); // added by viraj
+  clock_manager_hfxo_init.coreBiasAna = 0x05;  // added by viraj
+  HFXO0->XTALCTRL_SET = HFXO_XTALCTRL_SKIPCOREBIASOPT;  // added by viraj
   DBG_TOGGLE();
   CMU_HFXOInit(&clock_manager_hfxo_init);
   DBG_TOGGLE();

@@ -216,7 +216,7 @@ void sl_main_second_stage_init(void)
  * is started and before any other tasks are able to execute.
  *****************************************************************************/
 
-static void DBG_TOGGLE() {GPIO_PinOutToggle(gpioPortB, 4);}
+//static void DBG_TOGGLE() {GPIO_PinOutToggle(gpioPortB, 4);}
 void sl_main_init(void)
 {
 #if defined(SL_CATALOG_MEMORY_MANAGER_PRESENT) && !defined(SL_CATALOG_CPP_SUPPORT_PRESENT)
@@ -273,7 +273,7 @@ void sl_main_init(void)
 #if defined(SL_CATALOG_CLOCK_MANAGER_PRESENT)
   sl_clock_manager_init();
 #endif
-  DBG_TOGGLE();
+  //DBG_TOGGLE();
 #if defined(SL_SI91X_SOC_MODE)
   SystemCoreClockUpdate();
 #endif

@@ -177,7 +177,7 @@ void app_init(void)
 {
   //sl_gpio_set_pin_mode(&dbg_pin, SL_GPIO_MODE_PUSH_PULL, 0);   // output, low
   //DBG_HIGH();
-  DBG_TOGGLE();
+  //DBG_TOGGLE();
   rail_ble_init(RAIL_BLE_PROTOCOL_BLE_1MBPS);
 
   // Get RAIL handle, used later by the application
@@ -187,7 +187,7 @@ void app_init(void)
   app_set_rail_tx_fifo(rail_handle);
 
   //DBG_LOW();
-  DBG_TOGGLE();
+  //DBG_TOGGLE();
   // initializes the ble adv
   app_rail_ble_adv_init(rail_handle);
 
@@ -278,26 +278,23 @@ static void app_rail_ble_adv_init(RAIL_Handle_t rail_handle)
   adv_rail_packet[ADV_RAIL_ADVA_OFFSET + 4] = DEVINFO->EUI48H & 0xff;
   adv_rail_packet[ADV_RAIL_ADVA_OFFSET + 5] = (DEVINFO->EUI48H >> 8) & 0xff;
 
-  sl_clock_manager_enable_bus_clock(SL_BUS_CLOCK_HFXO0);
+//  sl_clock_manager_enable_bus_clock(SL_BUS_CLOCK_HFXO0);
+//  // read core bais value.....
+//  adv_rail_packet[37] =(HFXO0->XTALCTRL & _HFXO_XTALCTRL_COREBIASANA_MASK) >> _HFXO_XTALCTRL_COREBIASANA_SHIFT;
+//  // read status
+//  uint8_t flags = 0;
+//  if (HFXO0->STATUS & HFXO_STATUS_RDY) {
+//    flags |= (1 << 0);     // set bit 0
+//  }
+//  if (HFXO0->STATUS & HFXO_STATUS_COREBIASOPTRDY) {
+//    flags |= (1 << 1);     // set bit 1
+//  }
+//  if (HFXO0->XTALCTRL & HFXO_XTALCTRL_SKIPCOREBIASOPT) {
+//    flags |= (1 << 2);     // set bit 2
+//  }
+//  adv_rail_packet[38] = flags;
 
-  // read core bais value.....
-  adv_rail_packet[37] =(HFXO0->XTALCTRL & _HFXO_XTALCTRL_COREBIASANA_MASK) >> _HFXO_XTALCTRL_COREBIASANA_SHIFT;
 
-  // read status
-  uint8_t flags = 0;
-  if (HFXO0->STATUS & HFXO_STATUS_RDY) {
-    flags |= (1 << 0);     // set bit 0
-  }
-
-  if (HFXO0->STATUS & HFXO_STATUS_COREBIASOPTRDY) {
-    flags |= (1 << 1);     // set bit 1
-  }
-
-  if (HFXO0->XTALCTRL & HFXO_XTALCTRL_SKIPCOREBIASOPT) {
-    flags |= (1 << 2);     // set bit 2
-  }
-
-  adv_rail_packet[38] = flags;
   // Configures us for the first advertising channel (Physical: 0, Logical: 37).
   // The CRC init value and Access Address come from the BLE specification.
   RAIL_BLE_ConfigChannelRadioParams(rail_handle,
@@ -377,7 +374,7 @@ static sl_status_t rail_ble_advertise(RAIL_Handle_t rail_handle,
 
   // 4. Next time, use the next channel: 0 → 1 → 2 → 0 …
   adv_ch_idx = (adv_ch_idx + 1) % 3;
-
+  if (status == RAIL_STATUS_NO_ERROR) {DBG_TOGGLE();}
   return status == RAIL_STATUS_NO_ERROR ? SL_STATUS_OK : SL_STATUS_FAIL;
 }
 
