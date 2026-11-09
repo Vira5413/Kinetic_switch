@@ -7,3 +7,6 @@ GNU ARM*/
 *.lst
 *.hex
 *.bin
+
+# Secret AES key – never commit
+secret_key.h

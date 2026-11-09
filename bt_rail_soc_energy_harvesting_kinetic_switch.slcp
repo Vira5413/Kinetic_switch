@@ -34,6 +34,7 @@ component:
 - {id: clock_manager}
 - {id: device_init}
 - {id: mpu}
+- {id: psa_crypto_ccm}
 - {id: radio_config_simple_rail_singlephy}
 - {id: rail_lib_singleprotocol}
 - {id: rail_util_callbacks}

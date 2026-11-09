@@ -40,6 +40,7 @@
 //                                   Includes
 // -----------------------------------------------------------------------------
 #include <stdint.h>
+#include <string.h>
 #include "app_assert.h"
 #include "em_emu.h"
 #include "efr32mg22_devinfo.h"
@@ -53,10 +54,12 @@
 #include "app_rail_ble.h"
 #include "app.h"
 
-//#include "psa/crypto.h"
+#include "psa/crypto.h"
+#include "secret_key.h"
 
 #include "em_gpio.h"
 #include "sl_clock_manager.h"
+
 
 // -----------------------------------------------------------------------------
 //                              Macros and Typedefs
@@ -69,6 +72,8 @@
 #define TX_INTERVAL_US                    30
 
 #define RAIL_BLE_ADV_CHANNEL              37
+
+#define ALG  PSA_ALG_AEAD_WITH_SHORTENED_TAG(PSA_ALG_CCM, 8)   // CCM with 8-byte tag
 
 static const uint16_t adv_logical_ch[3] = {37, 38, 39};
 static const uint16_t adv_physical_ch[3] = { 0, 12, 39 };
@@ -102,6 +107,8 @@ static void set_radio_to_idle_state(RAIL_Handle_t rail_handle);
  *****************************************************************************/
 static void handle_transmit(RAIL_Handle_t rail_handle);
 
+static void crypto_key_init(void);
+
 // -----------------------------------------------------------------------------
 //                                Global Variables
 // -----------------------------------------------------------------------------
@@ -113,11 +120,24 @@ static void handle_transmit(RAIL_Handle_t rail_handle);
 /// Transmit FIFO
 static __ALIGNED(RAIL_FIFO_ALIGNMENT) uint8_t tx_fifo[RAIL_FIFO_SIZE];
 
-#define ADV_RAIL_PACKET_LENGTH       39
+static psa_key_id_t key_id;
+
+#define ADV_RAIL_PACKET_LENGTH       32
 #define ADV_RAIL_ADVA_OFFSET         2
-#define ADV_RAIL_STATUS_OFFSET       15
-#define ADV_RAIL_RANDOM_OFFSET       31     // new
-#define ADV_RAIL_RANDOM_LEN          8      // new
+#define ADV_ADVA_LENGTH              6
+//#define ADV_RAIL_STATUS_OFFSET       15
+//#define ADV_RAIL_RANDOM_OFFSET       31     // new
+//#define ADV_RAIL_RANDOM_LEN          8      // new
+#define ADV_RAIL_AAD_OFFSET          13
+#define ADV_RAIL_AAD_LENGTH          3    // company ID (2) + version (1)
+#define ADV_TAG_LENGTH               8
+#define ADV_RANDOM_ID_OFFSET         16
+#define ADV_RANDOM_ID_LENGTH         7
+#define ADV_PLAINTEXT_LENGTH         1    // window status
+#define ADV_CIPHERTXT_TAG_OFFSET    23
+#define ADV_CIPHERTXT_TAG_LENGTH     (ADV_PLAINTEXT_LENGTH + ADV_TAG_LENGTH)   // 9
+#define NONCE_LENGTH                 13   // AdvA (6) + random ID (7)
+
 
 static const sl_gpio_t sense_pin = { .port = SL_GPIO_PORT_C, .pin = 0 };
 
@@ -127,25 +147,45 @@ static const sl_gpio_t sense_pin = { .port = SL_GPIO_PORT_C, .pin = 0 };
 
 #define DBG_TOGGLE()  GPIO_PinOutToggle(gpioPortB, 4)
 
+//static __ALIGNED(RAIL_FIFO_ALIGNMENT)
+//uint8_t adv_rail_packet[ADV_RAIL_PACKET_LENGTH] =
+//{
+//  0x02, // packet type: ADV_NONCONN_­IND, non-connectable
+//  0x25, // length: 37
+//  0x2f, 0x45, 0x0a, 0x6f, 0x0d, 0x00, // AdvA: advertiser address
+//  0x02, // adv data length 2
+//  0x01, // adv data type 1 (flags)
+//  0x06, // flags: LE General Discoverable Mode, BR/EDR Not Supported
+//  0x04, // adv data length 5
+//  0xff, // adv data type: manufacturer specific
+//  0xff, 0x02, // manufacturer: Silicon Labs
+//  0x00,  // STATUS: 0x00 released, 0x01 held   ← new
+//  0x0a, // adv data length 9
+//  0x09, // adv data type 9 (complete local name)
+//  'E', 'H', ' ', 'S', 'w', 'i', 't', 'c', 'h',// "EH Switch"
+//  0x0B, 0xFF, 0xFF, 0x02, // [27..30] new manufacturer data header
+//  0x00, 0x00, 0x00, 0x00,                 // [31..34] random ID ← filled from TRNG
+//  0x00, 0x00, 0x00, 0x00                 // [35..38]
+//};
+
 static __ALIGNED(RAIL_FIFO_ALIGNMENT)
 uint8_t adv_rail_packet[ADV_RAIL_PACKET_LENGTH] =
 {
   0x02, // packet type: ADV_NONCONN_­IND, non-connectable
-  0x25, // length: 37
+  0x1e, // length: 30
   0x2f, 0x45, 0x0a, 0x6f, 0x0d, 0x00, // AdvA: advertiser address
   0x02, // adv data length 2
   0x01, // adv data type 1 (flags)
   0x06, // flags: LE General Discoverable Mode, BR/EDR Not Supported
-  0x04, // adv data length 5
+  0x14, // adv data length 20
   0xff, // adv data type: manufacturer specific
   0xff, 0x02, // manufacturer: Silicon Labs
-  0x00,  // STATUS: 0x00 released, 0x01 held   ← new
-  0x0a, // adv data length 9
-  0x09, // adv data type 9 (complete local name)
-  'E', 'H', ' ', 'S', 'w', 'i', 't', 'c', 'h',// "EH Switch"
-  0x0B, 0xFF, 0xFF, 0x02, // [27..30] new manufacturer data header
-  0x00, 0x00, 0x00, 0x00,                 // [31..34] random ID ← filled from TRNG
-  0x00, 0x00, 0x00, 0x00                 // [35..38]
+  0x01, //version
+  0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00,       // 7bytes randomID Nonce <- filled from trng
+  0x00, // encrypted 1byte window status
+  0x00,0x00,0x00,0x00,
+  0x00,0x00,0x00,0x00, // Tag
 };
 
 static RAIL_ScheduleTxConfig_t shedule_tx_config = {
@@ -180,6 +220,7 @@ void app_init(void)
   //DBG_TOGGLE();
   rail_ble_init(RAIL_BLE_PROTOCOL_BLE_1MBPS);
 
+
   // Get RAIL handle, used later by the application
   rail_handle = rail_ble_get_handle();
 
@@ -188,8 +229,14 @@ void app_init(void)
 
   //DBG_LOW();
   //DBG_TOGGLE();
+  psa_crypto_init();
+  crypto_key_init();
+
+
   // initializes the ble adv
   app_rail_ble_adv_init(rail_handle);
+
+
 
 
 }
@@ -253,6 +300,17 @@ void sl_rail_util_on_event(RAIL_Handle_t rail_handle,
 //  return (s == PSA_SUCCESS) ? SL_STATUS_OK : SL_STATUS_FAIL;
 //}
 
+
+static void crypto_key_init(void)
+{
+  psa_key_attributes_t attr = PSA_KEY_ATTRIBUTES_INIT;
+  psa_set_key_type(&attr, PSA_KEY_TYPE_AES);                  // it's an AES key
+  psa_set_key_bits(&attr, 128);                               //128 bites
+  psa_set_key_usage_flags(&attr, PSA_KEY_USAGE_ENCRYPT);     // switch: encrypt only
+  psa_set_key_algorithm(&attr, ALG);                          // only allowed with this algorithm
+
+  psa_import_key(&attr, my_key_bytes, 16, &key_id);
+}
 /******************************************************************************
  * Initialization of RAIL TX FIFO
  *****************************************************************************/
@@ -278,23 +336,6 @@ static void app_rail_ble_adv_init(RAIL_Handle_t rail_handle)
   adv_rail_packet[ADV_RAIL_ADVA_OFFSET + 4] = DEVINFO->EUI48H & 0xff;
   adv_rail_packet[ADV_RAIL_ADVA_OFFSET + 5] = (DEVINFO->EUI48H >> 8) & 0xff;
 
-//  sl_clock_manager_enable_bus_clock(SL_BUS_CLOCK_HFXO0);
-//  // read core bais value.....
-//  adv_rail_packet[37] =(HFXO0->XTALCTRL & _HFXO_XTALCTRL_COREBIASANA_MASK) >> _HFXO_XTALCTRL_COREBIASANA_SHIFT;
-//  // read status
-//  uint8_t flags = 0;
-//  if (HFXO0->STATUS & HFXO_STATUS_RDY) {
-//    flags |= (1 << 0);     // set bit 0
-//  }
-//  if (HFXO0->STATUS & HFXO_STATUS_COREBIASOPTRDY) {
-//    flags |= (1 << 1);     // set bit 1
-//  }
-//  if (HFXO0->XTALCTRL & HFXO_XTALCTRL_SKIPCOREBIASOPT) {
-//    flags |= (1 << 2);     // set bit 2
-//  }
-//  adv_rail_packet[38] = flags;
-
-
   // Configures us for the first advertising channel (Physical: 0, Logical: 37).
   // The CRC init value and Access Address come from the BLE specification.
   RAIL_BLE_ConfigChannelRadioParams(rail_handle,
@@ -303,13 +344,34 @@ static void app_rail_ble_adv_init(RAIL_Handle_t rail_handle)
                                     RAIL_BLE_ADV_CHANNEL,
                                     false);
 
-  //fill_random(&adv_rail_packet[ADV_RAIL_RANDOM_OFFSET], ADV_RAIL_RANDOM_LEN);
 
   bool level = false;
   sl_gpio_set_pin_mode(&sense_pin, SL_GPIO_MODE_INPUT, 0);
   sl_gpio_get_pin_input(&sense_pin, &level);
   sl_gpio_set_pin_mode(&sense_pin, SL_GPIO_MODE_DISABLED, 0);  // input buffer off again
-  adv_rail_packet[ADV_RAIL_STATUS_OFFSET] = level ? 0x01 : 0x00;
+  uint8_t status = level ? 0x01 : 0x00;
+
+  psa_status_t  s = psa_generate_random(&adv_rail_packet[ADV_RANDOM_ID_OFFSET], ADV_RANDOM_ID_LENGTH);
+
+  if (s != PSA_SUCCESS) {
+    return;          // failed → leave the function, tx_requested stays false → nothing is sent
+  }
+
+  uint8_t nonce[NONCE_LENGTH] ;
+
+  memcpy(&nonce[0], &adv_rail_packet[ADV_RAIL_ADVA_OFFSET], ADV_ADVA_LENGTH);
+  memcpy(&nonce[ADV_ADVA_LENGTH], &adv_rail_packet[ADV_RANDOM_ID_OFFSET], ADV_RANDOM_ID_LENGTH);
+
+  size_t out_len = 0;
+  s = psa_aead_encrypt(key_id, ALG,
+                           nonce, NONCE_LENGTH,
+                           &adv_rail_packet[ADV_RAIL_AAD_OFFSET], ADV_RAIL_AAD_LENGTH,
+                           &status, ADV_PLAINTEXT_LENGTH,
+                           &adv_rail_packet[ADV_CIPHERTXT_TAG_OFFSET], ADV_CIPHERTXT_TAG_LENGTH,
+                           &out_len);
+  if (s != PSA_SUCCESS || out_len != ADV_CIPHERTXT_TAG_LENGTH) {
+    return;      // encryption failed → don't transmit
+  }
 
   tx_requested = true;
 }
